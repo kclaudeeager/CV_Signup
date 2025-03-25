@@ -4,3 +4,4 @@ __pycache__
 *.pyo
 *.db
 face_dataset
+readme_shell.sh

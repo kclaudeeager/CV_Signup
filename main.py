@@ -148,7 +148,35 @@ async def signup(file: UploadFile = File(...), name: str = File(...)):
     face_encodings = face_recognition.face_encodings(rgb_frame, face_locations)
     
     if not face_encodings:
+        logging.info("No face detected")
         raise HTTPException(status_code=400, detail="No face detected")
+    
+    # Check if user already exists
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("SELECT name, face_encodings FROM users")
+    users = c.fetchall()
+    
+    for existing_name, stored_encodings_bytes in users:
+        # Convert stored bytes back to numpy array
+        stored_encodings = np.frombuffer(stored_encodings_bytes, dtype=np.float64).reshape(-1, 128)
+        
+        # Calculate distances
+        distances = face_recognition.face_distance(stored_encodings, face_encodings[0])
+        min_distance = min(distances)
+        
+        if min_distance < 0.4:  # Threshold of 40%
+            logging.info(f"User {existing_name} already exists with distance: {min_distance}")
+            conn.close()
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error_code": "USER_ALREADY_EXISTS",
+                    "message": "One or more faces already registered with this face"
+                }
+            )
+    
+    logging.info(f"Face detected for new user: {name}")
     
     # Create user-specific directory
     user_face_dir = os.path.join(FACE_STORAGE_DIR, name)
@@ -180,8 +208,6 @@ async def signup(file: UploadFile = File(...), name: str = File(...)):
     combined_encodings = np.array(augmented_encodings)
     
     # Store in database
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
     c.execute("""
         INSERT INTO users (name, face_encodings, face_images_dir) 
         VALUES (?, ?, ?)

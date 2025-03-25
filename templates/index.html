@@ -155,22 +155,36 @@
         }
 
         // Final signup submission
-        finalSignupForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
-            const imageBlob = await (await fetch(canvas.toDataURL('image/jpeg'))).blob();
-            const formData = new FormData();
-            formData.append('name', document.getElementById('name').value);
-            formData.append('file', imageBlob, 'face.jpg');
+    finalSignupForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageBlob = await (await fetch(canvas.toDataURL('image/jpeg'))).blob();
+        const formData = new FormData();
+        formData.append('name', document.getElementById('name').value);
+        formData.append('file', imageBlob, 'face.jpg');
 
+        try {
             const response = await fetch('/signup', {
                 method: 'POST',
                 body: formData
             });
 
-            const result = await response.json();
-            alert(result.status);
-        });
+            if (response.ok) {
+                const result = await response.json();
+                alert("Signup successful!");
+                signupForm.style.display = 'none';
+                activateStep(3);
+            } else {
+                const error = await response.json();
+                const errorCode = error.detail.error_code || "UNKNOWN_ERROR";
+                const errorMessage = error.detail.message || "An unknown error occurred.";
+                alert(`Signup failed. Error Code: ${errorCode}. Message: ${errorMessage}`);
+            }
+        } catch (err) {
+            console.error("Unexpected error:", err);
+            alert("An unexpected error occurred. Please try again.");
+        }
+    });
 
         // Toggle between login methods
         loginMethodRadios.forEach(radio => {
