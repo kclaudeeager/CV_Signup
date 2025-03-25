@@ -106,6 +106,7 @@ CV_Signup/
 ├── face_dataset/          # Directory for storing user face images
 ├── face_features.db       # SQLite database for storing user data
 ├── .gitignore             # Git ignore file
+|── requirements.txt       # Python library requirements
 └── README.md              # Project documentation
 ```
 
