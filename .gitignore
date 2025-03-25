@@ -1,0 +1,6 @@
+cv_signup
+__pycache__
+*.pyc
+*.pyo
+*.db
+face_dataset

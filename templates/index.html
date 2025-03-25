@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <link rel="stylesheet" href="/static/style.css">
+    <title>Face Recognition System</title>
+</head>
+<body>
+    <div id="signup-steps">
+        <div class="step" id="step-1">Step 1: Detect Faces</div>
+        <div class="step" id="step-2">Step 2: Choose Face</div>
+        <div class="step" id="step-3">Step 3: Capture & Confirm</div>
+    </div>
+
+    <div id="face-detection-section">
+        <h2>Face Detection</h2>
+        <video id="video" width="640" height="480" autoplay></video>
+        <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+        <div>
+            <button id="detect-faces-btn">Detect Faces</button>
+        </div>
+        
+        <div id="faces-grid"></div>
+    </div>
+
+    <div id="signup-form" style="display:none;">
+        <h2>Complete Signup</h2>
+        <form id="final-signup-form">
+            <input type="text" id="name" placeholder="Enter your name" required>
+            <input type="hidden" id="selected-face-data" name="face">
+            <button type="submit">Complete Signup</button>
+        </form>
+    </div>
+
+    <!-- New Login Section -->
+    <div id="login-section">
+        <h2>Login</h2>
+        <div>
+            <label>
+                <input type="radio" name="login-method" value="upload" checked>
+                Upload Image
+            </label>
+            <label>
+                <input type="radio" name="login-method" value="live">
+                Live Detection
+            </label>
+        </div>
+    
+        <!-- Upload Image Login -->
+        <div id="upload-login" style="display: block;">
+            <form id="login-form">
+                <input type="file" id="login-file" accept="image/*" required>
+                <button type="submit">Login</button>
+            </form>
+        </div>
+    
+        <!-- Live Detection Login -->
+        <div id="live-login" style="display: none;">
+            <video id="login-video" width="640" height="480" autoplay></video>
+            <canvas id="login-canvas" width="640" height="480" style="display:none;"></canvas>
+            <button id="live-login-btn">Login with Live Detection</button>
+        </div>
+    
+        <div id="login-result"></div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const facesGrid = document.getElementById('faces-grid');
+        const detectFacesBtn = document.getElementById('detect-faces-btn');
+        const signupForm = document.getElementById('signup-form');
+        const finalSignupForm = document.getElementById('final-signup-form');
+        const loginForm = document.getElementById('login-form');
+        const loginResult = document.getElementById('login-result');
+        const loginMethodRadios = document.querySelectorAll('input[name="login-method"]');
+        const uploadLogin = document.getElementById('upload-login');
+        const liveLogin = document.getElementById('live-login');
+        const loginVideo = document.getElementById('login-video');
+        const loginCanvas = document.getElementById('login-canvas');
+        const liveLoginBtn = document.getElementById('live-login-btn');
+        let selectedFace = null;
+
+        // Step activation
+        function activateStep(stepNumber) {
+            document.querySelectorAll('.step').forEach(step => step.classList.remove('active'));
+            document.getElementById(`step-${stepNumber}`).classList.add('active');
+        }
+
+        // Webcam access
+        async function startWebcam() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert("Your browser does not support webcam access.");
+                return;
+            }
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                video.play();
+            } catch (error) {
+                alert("Unable to access the webcam. Please check your permissions.");
+                console.error(error);
+            }
+        }
+
+        // Detect faces
+        async function detectFaces() {
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageBlob = await (await fetch(canvas.toDataURL('image/jpeg'))).blob();
+            const formData = new FormData();
+            formData.append('file', imageBlob, 'frame.jpg');
+
+            const response = await fetch('/detect', {
+                method: 'POST',
+                body: formData,
+            });
+
+            const responseData = await response.json();
+            console.log(responseData);
+
+            const { faces } = responseData;
+
+            if (!faces) {
+                alert("No faces detected or invalid response from the server.");
+                return;
+            }
+
+            facesGrid.innerHTML = '';
+
+            faces.forEach((face, index) => {
+                const [x1, y1, x2, y2] = face;
+                const faceCanvas = document.createElement('canvas');
+                faceCanvas.width = x2 - x1;
+                faceCanvas.height = y2 - y1;
+                const ctx = faceCanvas.getContext('2d');
+                ctx.drawImage(canvas, x1, y1, x2 - x1, y2 - y1, 0, 0, x2 - x1, y2 - y1);
+
+                faceCanvas.classList.add('face-option');
+                faceCanvas.dataset.faceData = JSON.stringify(face);
+
+                faceCanvas.addEventListener('click', () => {
+                    document.querySelectorAll('.face-option').forEach(f => f.classList.remove('selected'));
+                    faceCanvas.classList.add('selected');
+                    selectedFace = face;
+                    signupForm.style.display = 'block';
+                    activateStep(2);
+                });
+
+                facesGrid.appendChild(faceCanvas);
+            });
+
+            activateStep(2);
+        }
+
+        // Final signup submission
+        finalSignupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageBlob = await (await fetch(canvas.toDataURL('image/jpeg'))).blob();
+            const formData = new FormData();
+            formData.append('name', document.getElementById('name').value);
+            formData.append('file', imageBlob, 'face.jpg');
+
+            const response = await fetch('/signup', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+            alert(result.status);
+        });
+
+        // Toggle between login methods
+        loginMethodRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.value === 'upload') {
+                    uploadLogin.style.display = 'block';
+                    liveLogin.style.display = 'none';
+                } else {
+                    uploadLogin.style.display = 'none';
+                    liveLogin.style.display = 'block';
+                    startWebcamForLogin();
+                }
+            });
+        });
+
+        // Start webcam for live login
+        async function startWebcamForLogin() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert("Your browser does not support webcam access.");
+                return;
+            }
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                loginVideo.srcObject = stream;
+                loginVideo.play();
+            } catch (error) {
+                alert("Unable to access the webcam. Please check your permissions.");
+                console.error(error);
+            }
+        }
+
+        // Handle login with uploaded image
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('login-file');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert("Please upload an image.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch('/login', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                loginResult.textContent = `Login successful! Welcome, ${result.user}.`;
+            } else {
+                loginResult.textContent = "Login failed. No matching face found.";
+            }
+        });
+
+        // Handle login with live detection
+        liveLoginBtn.addEventListener('click', async () => {
+            loginCanvas.getContext('2d').drawImage(loginVideo, 0, 0, loginCanvas.width, loginCanvas.height);
+            const imageBlob = await (await fetch(loginCanvas.toDataURL('image/jpeg'))).blob();
+            const formData = new FormData();
+            formData.append('file', imageBlob, 'live_frame.jpg');
+
+            const response = await fetch('/login', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                loginResult.textContent = `Login successful! Welcome, ${result.user}.`;
+            } else {
+                loginResult.textContent = "Login failed. No matching face found.";
+            }
+        });
+
+        // Initialize
+        async function init() {
+            activateStep(1);
+            await startWebcam();
+            detectFacesBtn.addEventListener('click', detectFaces);
+        }
+
+        init();
+    </script>
+</body>
+</html>
