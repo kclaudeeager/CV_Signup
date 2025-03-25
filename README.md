@@ -22,7 +22,7 @@ This project is a face recognition system built using **FastAPI**, **OpenCV**, *
 Install the required Python libraries using `pip`:
 
 ```bash
-pip install fastapi uvicorn opencv-python-headless numpy face_recognition albumentations ultralytics
+pip install -r requirements.txt
 ```
 
 ### Additional Tools
